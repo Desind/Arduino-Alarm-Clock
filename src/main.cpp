@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 
 #include <DHT.h>
 #include <virtuabotixRTC.h>
@@ -6,8 +7,8 @@
 
 #define DHTPIN A0
 #define DHTTYPE DHT11
-#define BUZZER A3
-#define BUTTON_CHAIN A4
+#define BUZZER 11
+#define BUTTON_CHAIN A3
 
 #define DIGIT_DASH 20
 #define DIGIT_H 21
@@ -22,7 +23,10 @@
 #define MODE_CHANGE_TIME_DAYS 14
 #define MODE_CHANGE_TIME_MONTHS 15
 #define MODE_CHANGE_TIME_YEARS 16
-#define MODE_CHANGE_ALARM 2
+#define MODE_CHANGE_ALARM_SETUP 20
+#define MODE_CHANGE_ALARM_HOURS 21
+#define MODE_CHANGE_ALARM_MINUTES 22
+#define MODE_CHANGE_ALARM_SECONDS 23
 #define MODE_ALARM 3
 
 #define BUT_PLUS 1
@@ -41,6 +45,7 @@ void printTime();
 void printDate();
 void printTemp();
 void printHumidity();
+void printHumTemp();
 
 const int clock = 13;
 const int latch = 12;
@@ -55,7 +60,7 @@ const int digit6 = 4;
 const int digit7 = 3;
 const int digit8 = 2;
 
-const byte digit[25] =
+const byte digit[27] =
 	{
 		B00000011, //0
 		B10011111, //1
@@ -81,7 +86,9 @@ const byte digit[25] =
 		B10010001, //H
 		B01100011, //C
 		B00111001, //*
-		B11111111  //empty
+		B11111111, //empty
+		B11010101, //n
+		B01110001  //F
 };
 
 int secondCounterPrev = 0;
@@ -100,8 +107,22 @@ int clockMode = 0;
 boolean buttonPressed = false;
 int buttonNumber = 0;
 
-int changeTimeStatus = 0;
+boolean isAlarmOn = false;
+int alarmHours = 0;
+int alarmMinutes = 0;
+int alarmSeconds = 0;
 
+void writeIntIntoEEPROM(int address, int number)
+{
+	byte byte1 = number >> 8;
+	byte byte2 = number & 0xFF;
+	EEPROM.write(address, byte1);
+	EEPROM.write(address + 1, byte2);
+}
+int readIntFromEEPROM(int address)
+{
+	return (EEPROM.read(address) << 8) + EEPROM.read(address + 1);
+}
 void setup()
 {
 	dht.begin();
@@ -134,15 +155,22 @@ void setup()
 	clk.days = RTC.dayofmonth;
 	clk.months = RTC.month;
 	clk.years = RTC.year;
-
-	//tone(BUZZER, 970, 2000);
+	short readIsAlarmOn = EEPROM.read(0);
+	short readHours = EEPROM.read(1);
+	short readMinutes = EEPROM.read(2);
+	short readSeconds = EEPROM.read(3);
+	if (readIsAlarmOn == 1)
+	{
+		isAlarmOn = true;
+	}
+	else if (readIsAlarmOn == 0){
+		isAlarmOn = false;
+	}
+	if (readHours > -1 && readHours<23) alarmHours = readHours;
+	if (readMinutes > -1 && readMinutes<60) alarmMinutes = readMinutes;
+	if (readSeconds > -1 && readSeconds<60) alarmSeconds = readSeconds;
 }
 /*void setDS1302Time(uint8_t seconds, uint8_t minutes,uint8_t hours, uint8_t dayofweek,uint8_t dayofmonth, uint8_t month,int year); */
-
-//BUTTON 1 +
-//BUTTON 2 -
-
-
 
 void loop()
 {
@@ -232,6 +260,41 @@ void loop()
 					changedClk.days++;
 					break;
 				}
+				case MODE_CHANGE_ALARM_SETUP:
+				{
+					isAlarmOn = true;
+					break;
+				}
+				case MODE_CHANGE_ALARM_HOURS:
+				{
+					if (alarmHours == 23)
+					{
+						alarmHours = 0;
+						break;
+					}
+					alarmHours++;
+					break;
+				}
+				case MODE_CHANGE_ALARM_MINUTES:
+				{
+					if (alarmMinutes == 59)
+					{
+						alarmMinutes = 0;
+						break;
+					}
+					alarmMinutes++;
+					break;
+				}
+				case MODE_CHANGE_ALARM_SECONDS:
+				{
+					if (alarmSeconds == 59)
+					{
+						alarmSeconds = 0;
+						break;
+					}
+					alarmSeconds++;
+					break;
+				}
 			}
 		}
 		buttonPressed = true;
@@ -315,6 +378,39 @@ void loop()
 					changedClk.days--;
 					break;
 				}
+				case MODE_CHANGE_ALARM_SETUP:{
+					isAlarmOn = false;
+					EEPROM.write(0, 0);
+					break;
+				}
+				case MODE_CHANGE_ALARM_HOURS:{
+					if(alarmHours == 0){
+						alarmHours = 23;
+						break;
+					}
+					alarmHours--;
+					break;
+				}
+				case MODE_CHANGE_ALARM_MINUTES:
+				{
+					if (alarmMinutes == 0)
+					{
+						alarmMinutes = 59;
+						break;
+					}
+					alarmMinutes--;
+					break;
+				}
+				case MODE_CHANGE_ALARM_SECONDS:
+				{
+					if (alarmSeconds == 0)
+					{
+						alarmSeconds = 59;
+						break;
+					}
+					alarmSeconds--;
+					break;
+				}
 			}
 		}
 		buttonPressed = true;
@@ -322,6 +418,39 @@ void loop()
 	else if (buttonChain > 400)
 	{
 		//BUTTON 3 ALARM
+		if(buttonPressed == false){
+			switch(clockMode){
+				case MODE_CLOCK:{
+					clockMode = MODE_CHANGE_ALARM_SETUP;
+					break;
+				}
+				case MODE_CHANGE_ALARM_SETUP:{
+					if(isAlarmOn){
+						clockMode = MODE_CHANGE_ALARM_HOURS;
+					}else{
+						clockMode = MODE_CLOCK;
+					}
+					break;
+				}
+				case MODE_CHANGE_ALARM_HOURS:{
+					clockMode = MODE_CHANGE_ALARM_MINUTES;
+					break;
+				}
+				case MODE_CHANGE_ALARM_MINUTES:{
+					clockMode = MODE_CHANGE_ALARM_SECONDS;
+					break;
+				}
+				case MODE_CHANGE_ALARM_SECONDS:{
+					clockMode = MODE_CLOCK;
+					EEPROM.write(0, 1);
+					EEPROM.write(1, alarmHours);
+					EEPROM.write(2, alarmMinutes);
+					EEPROM.write(3, alarmSeconds);
+					modeTimer = 0;
+					break;
+				}
+			}
+		}
 		buttonPressed = true;
 	}
 	else if (buttonChain > 250)
@@ -368,6 +497,7 @@ void loop()
 					clk.seconds = changedClk.seconds;
 					RTC.setDS1302Time(clk.seconds, clk.minutes, clk.hours, 1, clk.days, clk.months, clk.years);
 					clockMode = MODE_CLOCK;
+					modeTimer = 0;
 					break;
 				}
 			}
@@ -396,8 +526,9 @@ void loop()
 					humidity = dht.readHumidity();
 					temperature = dht.readTemperature();
 				}
-				printTemp();
-				printHumidity();
+				//printTemp();
+				//printHumidity();
+				printHumTemp();
 			}
 			else
 			{
@@ -469,6 +600,47 @@ void loop()
 			}
 			break;
 		}
+		case MODE_CHANGE_ALARM_SETUP:{
+			if(isAlarmOn){
+				screenUpdate(DIGIT_EMPTY, 0, 25, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY);
+			}else{
+				screenUpdate(DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY, 0, 26, 26, DIGIT_EMPTY);
+			}
+			break;
+		}
+		case MODE_CHANGE_ALARM_HOURS:{
+			if ((secondCounterNew % 1000) < 500)
+			{
+				screenUpdate((alarmHours/10)%10,alarmHours%10,DIGIT_EMPTY,(alarmMinutes/10)%10,alarmMinutes%10,DIGIT_EMPTY,(alarmSeconds/10)%10,alarmSeconds%10);
+			}else
+			{
+				screenUpdate(DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY, (alarmMinutes / 10) % 10, alarmMinutes % 10, DIGIT_EMPTY, (alarmSeconds / 10) % 10, alarmSeconds % 10);
+			}
+			break;
+		}
+		case MODE_CHANGE_ALARM_MINUTES:
+		{
+			if ((secondCounterNew % 1000) < 500)
+			{
+				screenUpdate((alarmHours / 10) % 10, alarmHours % 10, DIGIT_EMPTY, (alarmMinutes / 10) % 10, alarmMinutes % 10, DIGIT_EMPTY, (alarmSeconds / 10) % 10, alarmSeconds % 10);
+			}
+			else
+			{
+				screenUpdate((alarmHours / 10) % 10, alarmHours % 10, DIGIT_EMPTY, DIGIT_EMPTY,DIGIT_EMPTY, DIGIT_EMPTY, (alarmSeconds / 10) % 10, alarmSeconds % 10);
+			}
+			break;
+		}
+		case MODE_CHANGE_ALARM_SECONDS:{
+			if ((secondCounterNew % 1000) < 500)
+			{
+				screenUpdate((alarmHours / 10) % 10, alarmHours % 10, DIGIT_EMPTY, (alarmMinutes / 10) % 10, alarmMinutes % 10, DIGIT_EMPTY, (alarmSeconds / 10) % 10, alarmSeconds % 10);
+			}
+			else
+			{
+				screenUpdate((alarmHours / 10) % 10, alarmHours % 10, DIGIT_EMPTY, (alarmMinutes / 10) % 10, alarmMinutes % 10, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY);
+			}
+			break;
+		}
 	}
 }
 
@@ -537,7 +709,11 @@ void printTime()
 	int hours = clk.hours;
 	int minutes = clk.minutes;
 	int seconds = clk.seconds;
-	screenUpdate(((hours / 10) % 10), (hours % 10), DIGIT_EMPTY, ((minutes / 10) % 10), (minutes % 10), DIGIT_EMPTY, ((seconds / 10) % 10), (seconds % 10));
+	if(isAlarmOn){
+		screenUpdate(((hours / 10) % 10), (hours % 10), DIGIT_EMPTY, ((minutes / 10) % 10), (minutes % 10), DIGIT_EMPTY, ((seconds / 10) % 10), (seconds % 10)+10);
+	}else{
+		screenUpdate(((hours / 10) % 10), (hours % 10), DIGIT_EMPTY, ((minutes / 10) % 10), (minutes % 10), DIGIT_EMPTY, ((seconds / 10) % 10), (seconds % 10));
+	}	
 }
 
 void printDate()
@@ -545,7 +721,11 @@ void printDate()
 	int day = clk.days;
 	int month = clk.months;
 	int year = clk.years;
-	screenUpdate(((day / 10) % 10), (day % 10), DIGIT_DASH, ((month / 10) % 10), (month % 10), DIGIT_DASH, ((year / 10) % 10), (year % 10));
+	if(isAlarmOn){
+		screenUpdate(((day / 10) % 10), (day % 10), DIGIT_DASH, ((month / 10) % 10), (month % 10), DIGIT_DASH, ((year / 10) % 10), (year % 10)+10);
+	}else{
+		screenUpdate(((day / 10) % 10), (day % 10), DIGIT_DASH, ((month / 10) % 10), (month % 10), DIGIT_DASH, ((year / 10) % 10), (year % 10));
+	}
 }
 
 void printTemp()
@@ -579,5 +759,32 @@ void printHumidity()
 	else if (hum > 9)
 	{
 		screenUpdate(DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_H, (hum / 10) % 10, hum % 10);
+	}
+}
+void printHumTemp(){
+	int hum = round(humidity);
+	if(hum > 99) hum = 99;
+	int h1 = (hum / 10) % 10;
+	int h2 = hum%10;
+	if(h1==0) h1=DIGIT_EMPTY;
+	int temp = round(temperature);
+	if(isAlarmOn){
+		h2+=10;
+	}
+	if (temp > 9)
+	{
+		screenUpdate((temp / 10) % 10, (temp % 10), DIGIT_DEGREE, DIGIT_C, DIGIT_EMPTY, DIGIT_H, h1, h2);
+	}
+	else if (temp > -1)
+	{
+		screenUpdate((temp % 10), DIGIT_DEGREE, DIGIT_C, DIGIT_EMPTY, DIGIT_EMPTY, DIGIT_H, h1, h2);
+	}
+	else if (temp > -10)
+	{
+		screenUpdate(DIGIT_DASH, -(temp % 10), DIGIT_DEGREE, DIGIT_C, DIGIT_EMPTY, DIGIT_H, h1, h2);
+	}
+	else
+	{
+		screenUpdate(DIGIT_DASH, -(temp / 10) % 10, -(temp % 10), DIGIT_DEGREE, DIGIT_C, DIGIT_H, h1, h2);
 	}
 }
