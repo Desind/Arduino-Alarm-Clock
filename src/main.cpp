@@ -107,10 +107,13 @@ int clockMode = 0;
 boolean buttonPressed = false;
 int buttonNumber = 0;
 
-boolean isAlarmOn = false;
-int alarmHours = 0;
+boolean isAlarmOn = true;
+int alarmHours = 12;
 int alarmMinutes = 0;
 int alarmSeconds = 0;
+int alarmCycleCounter = 0;
+boolean isAlarmTriggered = false;
+
 
 void writeIntIntoEEPROM(int address, int number)
 {
@@ -174,7 +177,26 @@ void setup()
 
 void loop()
 {
-
+	if(clk.hours == alarmHours && clk.minutes == alarmMinutes && clk.seconds == alarmSeconds && isAlarmTriggered == false){
+		isAlarmTriggered = true;
+	}
+	if(isAlarmTriggered){
+		switch(alarmCycleCounter%100){
+			case 0:{
+				tone(BUZZER, 760); //35, 450, 970, 760
+				break;
+			} 
+			case 66:{
+				noTone(BUZZER);
+				break;
+			}
+			case 99:{
+				alarmCycleCounter=-1;
+				break;
+			}
+		}
+		alarmCycleCounter++;
+	}
 	if (clk.hours % 2 == 0)
 	{
 		secondTimeBase = 1001;
@@ -197,103 +219,109 @@ void loop()
 		//BUTTON 1 +
 		if (buttonPressed == false)
 		{
-			switch (clockMode){
-				case MODE_CLOCK:{
-					if (modeTimer > 3500)
+			if(isAlarmTriggered){
+				isAlarmTriggered = false;
+				alarmCycleCounter = 0;
+				noTone(BUZZER);
+			}else{
+				switch (clockMode){
+					case MODE_CLOCK:{
+						if (modeTimer > 3500)
+						{
+							modeTimer = 0;
+							break;
+						}else if (modeTimer > 3000)
+						{
+							modeTimer = 3500;
+							break;
+						}else if (modeTimer > 0)
+						{
+							modeTimer = 3000;
+							break;
+						}
+						break;
+					}
+					case MODE_CHANGE_TIME_HOURS:{
+						if (changedClk.hours==23){
+							changedClk.hours=0;
+							break;
+						}
+						changedClk.hours++;
+						break;
+					}
+					case MODE_CHANGE_TIME_MINUTES:{
+						if (changedClk.minutes == 59){
+							changedClk.minutes = 0;
+							break;
+						}
+						changedClk.minutes++;
+						break;
+					}
+					case MODE_CHANGE_TIME_SECONDS:{
+						if (changedClk.seconds == 59)
+						{
+							changedClk.seconds = 0;
+							break;
+						}
+						changedClk.seconds++;
+						break;
+					}
+					case MODE_CHANGE_TIME_YEARS:{
+						changedClk.years++;
+						break;
+					}
+					case MODE_CHANGE_TIME_MONTHS:{
+						if (changedClk.months == 12)
+						{
+							changedClk.months = 1;
+							break;
+						}
+						changedClk.months++;
+						break;
+					}
+					case MODE_CHANGE_TIME_DAYS:{
+						if(changedClk.days == changedClk.numberOfDays(changedClk.months,changedClk.years)){
+							changedClk.days = 1;
+							break;
+						}
+						changedClk.days++;
+						break;
+					}
+					case MODE_CHANGE_ALARM_SETUP:
 					{
-						modeTimer = 0;
+						isAlarmOn = true;
 						break;
-					}else if (modeTimer > 3000)
+					}
+					case MODE_CHANGE_ALARM_HOURS:
 					{
-						modeTimer = 3500;
+						if (alarmHours == 23)
+						{
+							alarmHours = 0;
+							break;
+						}
+						alarmHours++;
 						break;
-					}else if (modeTimer > 0)
+					}
+					case MODE_CHANGE_ALARM_MINUTES:
 					{
-						modeTimer = 3000;
+						if (alarmMinutes == 59)
+						{
+							alarmMinutes = 0;
+							break;
+						}
+						alarmMinutes++;
 						break;
 					}
-					break;
-				}
-				case MODE_CHANGE_TIME_HOURS:{
-					if (changedClk.hours==23){
-						changedClk.hours=0;
-						break;
-					}
-					changedClk.hours++;
-					break;
-				}
-				case MODE_CHANGE_TIME_MINUTES:{
-					if (changedClk.minutes == 59){
-						changedClk.minutes = 0;
-						break;
-					}
-					changedClk.minutes++;
-					break;
-				}
-				case MODE_CHANGE_TIME_SECONDS:{
-					if (changedClk.seconds == 59)
+					case MODE_CHANGE_ALARM_SECONDS:
 					{
-						changedClk.seconds = 0;
+						if (alarmSeconds == 59)
+						{
+							alarmSeconds = 0;
+							break;
+						}
+						alarmSeconds++;
 						break;
 					}
-					changedClk.seconds++;
-					break;
-				}
-				case MODE_CHANGE_TIME_YEARS:{
-					changedClk.years++;
-					break;
-				}
-				case MODE_CHANGE_TIME_MONTHS:{
-					if (changedClk.months == 12)
-					{
-						changedClk.months = 1;
-						break;
-					}
-					changedClk.months++;
-					break;
-				}
-				case MODE_CHANGE_TIME_DAYS:{
-					if(changedClk.days == changedClk.numberOfDays(changedClk.months,changedClk.years)){
-						changedClk.days = 1;
-						break;
-					}
-					changedClk.days++;
-					break;
-				}
-				case MODE_CHANGE_ALARM_SETUP:
-				{
-					isAlarmOn = true;
-					break;
-				}
-				case MODE_CHANGE_ALARM_HOURS:
-				{
-					if (alarmHours == 23)
-					{
-						alarmHours = 0;
-						break;
-					}
-					alarmHours++;
-					break;
-				}
-				case MODE_CHANGE_ALARM_MINUTES:
-				{
-					if (alarmMinutes == 59)
-					{
-						alarmMinutes = 0;
-						break;
-					}
-					alarmMinutes++;
-					break;
-				}
-				case MODE_CHANGE_ALARM_SECONDS:
-				{
-					if (alarmSeconds == 59)
-					{
-						alarmSeconds = 0;
-						break;
-					}
-					alarmSeconds++;
-					break;
 				}
 			}
 		}
@@ -303,123 +331,141 @@ void loop()
 	{
 		//BUTTON 2 -
 		if(buttonPressed == false){
-			switch (clockMode)
+			if (isAlarmTriggered)
 			{
-				case MODE_CLOCK:
-				{
-					if (modeTimer > 3500)
-					{
-						modeTimer = 3001;
-						break;
-					}
-					else if (modeTimer > 3000)
-					{
-						modeTimer = 0;
-						break;
-					}
-					else if (modeTimer > 0)
-					{
-						modeTimer = 3501;
-						break;
-					}
-				}
-				case MODE_CHANGE_TIME_HOURS:
-				{
-					if (changedClk.hours == 0)
-					{
-						changedClk.hours = 23;
-						break;
-					}
-					changedClk.hours--;
-					break;
-				}
-				case MODE_CHANGE_TIME_MINUTES:
-				{
-					if (changedClk.minutes == 0)
-					{
-						changedClk.minutes = 59;
-						break;
-					}
-					changedClk.minutes--;
-					break;
-				}
-				case MODE_CHANGE_TIME_SECONDS:
-				{
-					if (changedClk.seconds == 0)
-					{
-						changedClk.seconds = 59;
-						break;
-					}
-					changedClk.seconds--;
-					break;
-				}
-				case MODE_CHANGE_TIME_YEARS:
-				{
-					changedClk.years--;
-					break;
-				}
-				case MODE_CHANGE_TIME_MONTHS:
-				{
-					if (changedClk.months == 1)
-					{
-						changedClk.months = 12;
-						break;
-					}
-					changedClk.months--;
-					break;
-				}
-				case MODE_CHANGE_TIME_DAYS:
-				{
-					if (changedClk.days == 1)
-					{
-						changedClk.days = changedClk.numberOfDays(changedClk.months, changedClk.years);
-						break;
-					}
-					changedClk.days--;
-					break;
-				}
-				case MODE_CHANGE_ALARM_SETUP:{
-					isAlarmOn = false;
-					EEPROM.write(0, 0);
-					break;
-				}
-				case MODE_CHANGE_ALARM_HOURS:{
-					if(alarmHours == 0){
-						alarmHours = 23;
-						break;
-					}
-					alarmHours--;
-					break;
-				}
-				case MODE_CHANGE_ALARM_MINUTES:
-				{
-					if (alarmMinutes == 0)
-					{
-						alarmMinutes = 59;
-						break;
-					}
-					alarmMinutes--;
-					break;
-				}
-				case MODE_CHANGE_ALARM_SECONDS:
-				{
-					if (alarmSeconds == 0)
-					{
-						alarmSeconds = 59;
-						break;
-					}
-					alarmSeconds--;
-					break;
-				}
+				isAlarmTriggered = false;
+				alarmCycleCounter = 0;
+				noTone(BUZZER);
 			}
-		}
+			else
+			{
+					switch (clockMode)
+					{
+					case MODE_CLOCK:
+					{
+						if (modeTimer > 3500)
+						{
+							modeTimer = 3001;
+							break;
+						}
+						else if (modeTimer > 3000)
+						{
+							modeTimer = 0;
+							break;
+						}
+						else if (modeTimer > 0)
+						{
+							modeTimer = 3501;
+							break;
+						}
+					}
+					case MODE_CHANGE_TIME_HOURS:
+					{
+						if (changedClk.hours == 0)
+						{
+							changedClk.hours = 23;
+							break;
+						}
+						changedClk.hours--;
+						break;
+					}
+					case MODE_CHANGE_TIME_MINUTES:
+					{
+						if (changedClk.minutes == 0)
+						{
+							changedClk.minutes = 59;
+							break;
+						}
+						changedClk.minutes--;
+						break;
+					}
+					case MODE_CHANGE_TIME_SECONDS:
+					{
+						if (changedClk.seconds == 0)
+						{
+							changedClk.seconds = 59;
+							break;
+						}
+						changedClk.seconds--;
+						break;
+					}
+					case MODE_CHANGE_TIME_YEARS:
+					{
+						changedClk.years--;
+						break;
+					}
+					case MODE_CHANGE_TIME_MONTHS:
+					{
+						if (changedClk.months == 1)
+						{
+							changedClk.months = 12;
+							break;
+						}
+						changedClk.months--;
+						break;
+					}
+					case MODE_CHANGE_TIME_DAYS:
+					{
+						if (changedClk.days == 1)
+						{
+							changedClk.days = changedClk.numberOfDays(changedClk.months, changedClk.years);
+							break;
+						}
+						changedClk.days--;
+						break;
+					}
+					case MODE_CHANGE_ALARM_SETUP:{
+						isAlarmOn = false;
+						EEPROM.write(0, 0);
+						break;
+					}
+					case MODE_CHANGE_ALARM_HOURS:{
+						if(alarmHours == 0){
+							alarmHours = 23;
+							break;
+						}
+						alarmHours--;
+						break;
+					}
+					case MODE_CHANGE_ALARM_MINUTES:
+					{
+						if (alarmMinutes == 0)
+						{
+							alarmMinutes = 59;
+							break;
+						}
+						alarmMinutes--;
+						break;
+					}
+					case MODE_CHANGE_ALARM_SECONDS:
+					{
+						if (alarmSeconds == 0)
+						{
+							alarmSeconds = 59;
+							break;
+						}
+						alarmSeconds--;
+						break;
+					}
+					}
+				}	
+			}
 		buttonPressed = true;
 	}
 	else if (buttonChain > 400)
 	{
 		//BUTTON 3 ALARM
 		if(buttonPressed == false){
-			switch(clockMode){
+			if (isAlarmTriggered)
+			{
+				isAlarmTriggered = false;
+				alarmCycleCounter = 0;
+				noTone(BUZZER);
+			}
+			else
+			{
+				switch (clockMode)
+				{
 				case MODE_CLOCK:{
 					clockMode = MODE_CHANGE_ALARM_SETUP;
 					break;
@@ -449,15 +495,25 @@ void loop()
 					modeTimer = 0;
 					break;
 				}
+				}
 			}
-		}
+			}
 		buttonPressed = true;
 	}
 	else if (buttonChain > 250)
 	{
 		//BUTTON 4 TIME
 		if(buttonPressed == false){
-			switch (clockMode){
+			if (isAlarmTriggered)
+			{
+				isAlarmTriggered = false;
+				alarmCycleCounter = 0;
+				noTone(BUZZER);
+			}
+			else
+			{
+				switch (clockMode)
+				{
 				case MODE_CLOCK:{
 					changedClk.years = clk.years;
 					changedClk.months = clk.months;
@@ -500,8 +556,9 @@ void loop()
 					modeTimer = 0;
 					break;
 				}
+				}
 			}
-		}
+			}
 		buttonPressed = true;
 	}
 	else
