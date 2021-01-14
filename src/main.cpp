@@ -104,6 +104,8 @@ int secondTimeBase;
 
 int clockMode = 0;
 
+boolean isUpdatedIntoRTC = false;
+
 boolean buttonPressed = false;
 int buttonNumber = 0;
 
@@ -173,11 +175,20 @@ void setup()
 	if (readMinutes > -1 && readMinutes<60) alarmMinutes = readMinutes;
 	if (readSeconds > -1 && readSeconds<60) alarmSeconds = readSeconds;
 }
-/*void setDS1302Time(uint8_t seconds, uint8_t minutes,uint8_t hours, uint8_t dayofweek,uint8_t dayofmonth, uint8_t month,int year); */
 
 void loop()
 {
-	if(clk.hours == alarmHours && clk.minutes == alarmMinutes && clk.seconds == alarmSeconds && isAlarmTriggered == false){
+	//UPDATE TAME IN RTC CHIP TO MORE ACCURATE TIME
+	if(clk.seconds == 0 && clk.minutes==0 && isUpdatedIntoRTC == false){
+		isUpdatedIntoRTC = true;
+		RTC.setDS1302Time(clk.seconds, clk.minutes, clk.hours, 0, clk.days, clk.months, clk.years);
+	}
+	if(clk.seconds == 1){
+		isUpdatedIntoRTC = false;
+	}
+
+	//TRIGGER CLOCK
+	if(clk.hours == alarmHours && clk.minutes == alarmMinutes && clk.seconds == alarmSeconds && isAlarmTriggered == false && isAlarmOn == true){
 		isAlarmTriggered = true;
 	}
 	if(isAlarmTriggered){
@@ -197,7 +208,8 @@ void loop()
 		}
 		alarmCycleCounter++;
 	}
-	if (clk.hours % 2 == 0)
+	//ADJUST TIME TO MORE ACCURATE INCREMENT
+	if (clk.minutes < 33)
 	{
 		secondTimeBase = 1001;
 	}
